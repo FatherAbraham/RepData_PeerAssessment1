@@ -8,18 +8,80 @@ output:
 
 ## Loading and preprocessing the data
 
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+#load required libraries
+library(ggplot2)
+library(plyr)
+
+activity <- read.csv(unz("activity.zip", "activity.csv"), header =TRUE)
+
+##need as a date to try stuff out
+activity$date <- (as.POSIXct(as.character(activity$date), format = "%Y-%m-%d", tz = ""))
+
+##let's take the 0's out as the number of 0's makes the median 0 and distorts the dateset
+new_activity <- subset(activity,!steps %in% c(0))
+
+```
 
 
 ## What is mean total number of steps taken per day?
 
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+##histogram for total number of steps
+ggplot(new_activity, aes(x=date, y=steps)) + geom_bar(stat="identity", color = "black")  + ggtitle("Total Number of steps over the time period")
+
+##does the mean/median stuff
+SDI <- ddply(new_activity, c("date"), function(X) data.frame(Mean_steps = mean(X$steps, na.rm=TRUE), median_steps = quantile(X$steps, 0.50, na.rm=TRUE)))
+```
+
+Report on the mean and median:
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+first_mean <- mean(SDI$Mean_steps, na.rm=TRUE)
+first_median <- median(SDI$median_steps, na.rm=TRUE)
+
+first_mean
+first_median
+
+```
 
 
 ## What is the average daily activity pattern?
 
-
+...this means the average for each 5min period plotted....
 
 ## Imputing missing values
 
+First find out the number of rows with NA's
 
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+colSums(is.na(SDI))
+```
+
+My imputation strategy is to input the average of daily steps over the observation period into those days that do not have a value:
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+##replace missing values for Mean_steps with the average
+
+SDI$Mean_steps[is.na(SDI$Mean_steps)] <- median(SDI$Mean_steps, na.rm=TRUE)
+
+##new histogram for total number of steps
+
+ggplot(SDI, aes(x=date, y=Mean_steps)) + geom_bar(stat="identity", color = "black")  + ggtitle("Total Number of steps over the time period after imputation")
+
+##report on Mean and median
+
+second_mean <- mean(SDI$Mean_steps)
+second_median <- median(SDI$median_steps)
+
+##report on difference
+
+second_mean - first_mean
+second_median - first_median
+
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
