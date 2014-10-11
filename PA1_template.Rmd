@@ -8,39 +8,48 @@ output:
 
 ## Loading and preprocessing the data
 
+I will prepare the environment by loading the required libraries and sourcing the data assuming the activity.zip file is present in the working directory.  I will then cast the date column as a POSIX time, and remove the rows with 0 steps.
+
 ```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
 
 #load required libraries
 library(ggplot2)
 library(plyr)
+library(sqldf)
 
 activity <- read.csv(unz("activity.zip", "activity.csv"), header =TRUE)
 
 ##need as a date to try stuff out
 activity$date <- (as.POSIXct(as.character(activity$date), format = "%Y-%m-%d", tz = ""))
 
-##let's take the 0's out as the number of 0's makes the median 0 and distorts the dateset
-new_activity <- subset(activity,!steps %in% c(0))
-
 ```
 
 
 ## What is mean total number of steps taken per day?
 
+Plot a histogram to show the mean number of steps taken per day and then calculate the mean:
+
 ```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
 ##histogram for total number of steps
-ggplot(new_activity, aes(x=date, y=steps)) + geom_bar(stat="identity", color = "black")  + ggtitle("Total Number of steps over the time period")
+ggplot(activity, aes(x=date, y=steps)) + geom_bar(stat="identity", color = "black")  + ggtitle("Total Number of steps over the time period")
 
-##does the mean/median stuff
-SDI <- ddply(new_activity, c("date"), function(X) data.frame(Mean_steps = mean(X$steps, na.rm=TRUE), median_steps = quantile(X$steps, 0.50, na.rm=TRUE)))
+##get the total number of steps per day
+
+by_day <- sqldf("select sum(steps) as sum, date from activity group by date")
+
+##and fix the column "sum" to be an integer
+by_day$sum <- as.integer(by_day$sum)
+
+##take the mean and the median
+
+first_mean <- mean(by_day$sum, na.rm=TRUE)
+first_median <- median(by_day$sum, na.rm=TRUE)
+
 ```
 
-Report on the mean and median:
+The mean/median number of total number of steps per day is therefore
 
 ```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
-
-first_mean <- mean(SDI$Mean_steps, na.rm=TRUE)
-first_median <- median(SDI$median_steps, na.rm=TRUE)
 
 first_mean
 first_median
@@ -50,38 +59,72 @@ first_median
 
 ## What is the average daily activity pattern?
 
-...this means the average for each 5min period plotted....
-
-## Imputing missing values
-
-First find out the number of rows with NA's
+I will aggregate the average number of steps per interval, and put this into a new dataframe.  I will then plot using the now familiar *ggplot* library.
 
 ```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
 
-colSums(is.na(SDI))
+daily_pattern <- sqldf("select avg(steps) as average, interval from activity group by interval")
+
+ggplot(daily_pattern, aes(x=interval, y=average)) + geom_bar(stat="identity", color = "black")  + ggtitle("Average number of steps per interval")
+
 ```
 
-My imputation strategy is to input the average of daily steps over the observation period into those days that do not have a value:
+We can see there is a clear pattern for night and day, with peaks of activities around breakfast, lunch, mid-afternoon and finally early evening.
+
+## Imputing missing values
+
+First find out the number of rows with NA's:
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+colSums(is.na(by_day))
+
+```
+
+My imputation strategy is to input the average of the total of daily steps over the observation period into those days that do not have a value:
 
 ```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
 ##replace missing values for Mean_steps with the average
 
-SDI$Mean_steps[is.na(SDI$Mean_steps)] <- median(SDI$Mean_steps, na.rm=TRUE)
+by_day$sum[is.na(by_day$sum)] <- round(first_mean, 0)
 
 ##new histogram for total number of steps
 
-ggplot(SDI, aes(x=date, y=Mean_steps)) + geom_bar(stat="identity", color = "black")  + ggtitle("Total Number of steps over the time period after imputation")
+ggplot(by_day, aes(x=date, y=sum)) + geom_bar(stat="identity", color = "black")  + ggtitle("Total Number of steps over the time period after imputation")
 
 ##report on Mean and median
 
-second_mean <- mean(SDI$Mean_steps)
-second_median <- median(SDI$median_steps)
+second_mean <- mean(by_day$sum, na.rm=TRUE)
+second_median <- median(by_day$sum, na.rm=TRUE)
 
 ##report on difference
 
-second_mean - first_mean
-second_median - first_median
+abs(second_mean - first_mean)
+abs(second_median - first_median)
 
 ```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r}
+
+##add a column with the weekday
+by_day$weekdays <- strtrim(weekdays(by_day$date), 3)
+
+by_weekday <- sqldf("select avg(sum) as sum, weekdays from by_day group by weekdays")
+
+## factor and order
+by_weekday$weekdays <- factor(by_weekday$weekdays, levels= c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"))
+
+by_weekday <- by_weekday[order(by_weekday$weekdays), ]
+
+##add a column to show if it's a weekend or not
+by_weekday$weekend <- c("Workday", "Workday", "Workday", "Workday", "Workday", "Weekend", "Weekend")
+
+##plot using facets
+ggplot(by_weekday, aes(x=weekdays, y=sum)) + geom_bar(stat="identity", color = "blue", fill ="blue")  + ggtitle("Total Number of steps over the time period after imputation, by week and weekend") + facet_grid(. ~ weekend)
+
+```
+
+Clearly, the weekend is busier than the average office-based workday.
+
