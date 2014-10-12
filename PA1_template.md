@@ -3,7 +3,7 @@
 
 ## Loading and preprocessing the data
 
-I will prepare the environment by loading the required libraries and sourcing the data assuming the activity.zip file is present in the working directory.  I will then cast the date column as a POSIX time, and remove the rows with 0 steps.
+I will prepare the environment by loading the required libraries and sourcing the data assuming the activity.zip file is present in the working directory.  I will then cast the date column as a POSIX time to better display results.
 
 
 ```r
@@ -16,12 +16,15 @@ activity <- read.csv(unz("activity.zip", "activity.csv"), header =TRUE)
 
 ##need as a date to try stuff out
 activity$date <- (as.POSIXct(as.character(activity$date), format = "%Y-%m-%d", tz = ""))
+
+##add some information on weekdays
+activity$weekday <- strtrim(weekdays(activity$date), 3)
 ```
 
 
 ## What is mean total number of steps taken per day?
 
-Plot a histogram to show the mean number of steps taken per day and then calculate the mean:
+Plot a histogram to show the mean number of steps taken per day and then calculate the mean/median:
 
 
 ```r
@@ -73,7 +76,7 @@ I will aggregate the average number of steps per interval, and put this into a n
 ```r
 daily_pattern <- sqldf("select avg(steps) as average, interval from activity group by interval")
 
-ggplot(daily_pattern, aes(x=interval, y=average)) + geom_bar(stat="identity", color = "black")  + ggtitle("Average number of steps per interval")
+ggplot(daily_pattern, aes(x=interval, y=average)) + geom_line()  + ggtitle("Average number of steps per interval")
 ```
 
 ![plot of chunk unnamed-chunk-4](./PA1_template_files/figure-html/unnamed-chunk-4.png) 
@@ -134,26 +137,19 @@ abs(second_median - first_median)
 
 ## Are there differences in activity patterns between weekdays and weekends?
 
+There is no obvious difference between weekdays and weekends, looking at the maximum number of steps per interval (red) and looking at the mean (blue):
+
+
 
 ```r
-##add a column with the weekday
-by_day$weekdays <- strtrim(weekdays(by_day$date), 3)
+by_weekday <- sqldf("select avg(steps) as sum, interval, weekday from activity group by interval, weekday order by 3")
 
-by_weekday <- sqldf("select avg(sum) as sum, weekdays from by_day group by weekdays")
+by_weekday$weekday <- factor(by_weekday$weekday, levels= c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"))
 
-## factor and order
-by_weekday$weekdays <- factor(by_weekday$weekdays, levels= c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"))
+by_weekday <- by_weekday[order(by_weekday$weekday), ]
 
-by_weekday <- by_weekday[order(by_weekday$weekdays), ]
-
-##add a column to show if it's a weekend or not
-by_weekday$weekend <- c("Workday", "Workday", "Workday", "Workday", "Workday", "Weekend", "Weekend")
-
-##plot using facets
-ggplot(by_weekday, aes(x=weekdays, y=sum)) + geom_bar(stat="identity", color = "blue", fill ="blue")  + ggtitle("Total Number of steps over the time period after imputation, by week and weekend") + facet_grid(. ~ weekend)
+ggplot(by_weekday, aes(x=interval, y=sum)) + geom_line()  + ggtitle("Total Number of steps over the time period after imputation, by weekday") + facet_grid(. ~ weekday)  + geom_line(stat='hline', yintercept='mean', color='blue', linetype=1)  + geom_line(stat='hline', yintercept='max', color='red', linetype=1)
 ```
 
 ![plot of chunk unnamed-chunk-7](./PA1_template_files/figure-html/unnamed-chunk-7.png) 
-
-Clearly, the weekend is busier than the average office-based workday.
 
